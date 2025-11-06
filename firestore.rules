@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow read access to stats for everyone
+    match /stats/{document=**} {
+      allow read: if true;
+      allow write: if false; // Only Admin SDK can write (bypasses rules)
+    }
+  }
+}
+
