@@ -1,0 +1,38 @@
+# Simple sync script for local development
+#
+# INSTRUCTIONS:
+# 1. Copy this file to sync-local.ps1
+# 2. Replace YOUR_SECRET_TOKEN with your actual secret token (from .env.local CRON_SECRET)
+# 3. Make sure your local dev server is running on http://localhost:3000
+# 4. Run this script to trigger a manual sync
+
+Write-Host "Starting Strava sync..." -ForegroundColor Cyan
+Write-Host ""
+
+$Token = "YOUR_SECRET_TOKEN"  # Replace with your CRON_SECRET from .env.local
+$Url = "http://localhost:3000/api/sync"
+
+try {
+    Write-Host "Calling API endpoint: $Url" -ForegroundColor Yellow
+    $response = Invoke-WebRequest -Uri $Url -Method POST -Headers @{
+        "Authorization" = "Bearer $Token"
+    }
+
+    Write-Host ""
+    Write-Host "Response:" -ForegroundColor Green
+    $response.Content
+    Write-Host ""
+    Write-Host "Sync completed successfully!" -ForegroundColor Green
+} catch {
+    Write-Host ""
+    Write-Host "ERROR: Sync failed!" -ForegroundColor Red
+    Write-Host $_.Exception.Message -ForegroundColor Red
+
+    if ($_.Exception.Response) {
+        $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+        $responseBody = $reader.ReadToEnd()
+        Write-Host "Response body: $responseBody" -ForegroundColor Red
+    }
+    exit 1
+}
+

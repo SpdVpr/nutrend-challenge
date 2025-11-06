@@ -1,0 +1,31 @@
+# Strava OAuth Token Exchange Script
+# 
+# INSTRUCTIONS:
+# 1. Copy this file to get-strava-token.ps1
+# 2. Replace YOUR_CLIENT_ID with your Strava API Client ID
+# 3. Replace YOUR_CLIENT_SECRET with your Strava API Client Secret
+# 4. Get authorization code from: https://www.strava.com/oauth/authorize?client_id=YOUR_CLIENT_ID&response_type=code&redirect_uri=http://localhost&approval_prompt=force&scope=activity:read_all
+# 5. Replace CODE_FROM_URL with the code from the redirect URL
+# 6. Run this script to get your access and refresh tokens
+
+$clientId = "YOUR_CLIENT_ID"
+$clientSecret = "YOUR_CLIENT_SECRET"
+$code = "CODE_FROM_URL"  # Replace this with the actual code from the authorization URL
+
+$body = @{
+    client_id = $clientId
+    client_secret = $clientSecret
+    code = $code
+    grant_type = "authorization_code"
+} | ConvertTo-Json
+
+$response = Invoke-RestMethod -Uri "https://www.strava.com/oauth/token" -Method Post -Body $body -ContentType "application/json"
+
+Write-Host "Access Token: $($response.access_token)"
+Write-Host "Refresh Token: $($response.refresh_token)"
+Write-Host "Expires At: $($response.expires_at)"
+Write-Host ""
+Write-Host "Add these to your .env.local file:"
+Write-Host "STRAVA_ACCESS_TOKEN=$($response.access_token)"
+Write-Host "STRAVA_REFRESH_TOKEN=$($response.refresh_token)"
+

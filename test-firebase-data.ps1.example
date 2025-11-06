@@ -1,5 +1,9 @@
 # PowerShell script to test Firebase data
-# Run with: .\test-firebase-data.ps1
+#
+# INSTRUCTIONS:
+# 1. Copy this file to test-firebase-data.ps1
+# 2. Make sure you have .env.local file with your Firebase credentials
+# 3. Run this script to test Firebase connection and data
 
 Write-Host "Testing Firebase data..." -ForegroundColor Cyan
 Write-Host ""

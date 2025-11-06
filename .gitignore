@@ -37,6 +37,12 @@ yarn-error.log*
 *firebase-adminsdk*.json
 service-account*.json
 
+# Scripts with sensitive data
+get-strava-token.ps1
+debug-strava.ps1
+sync-local.ps1
+test-firebase-data.ps1
+
 # vercel
 .vercel
 

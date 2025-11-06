@@ -1,4 +1,10 @@
 # Debug Strava API
+# 
+# INSTRUCTIONS:
+# 1. Copy this file to debug-strava.ps1
+# 2. Make sure you have .env.local file with your Strava credentials
+# 3. Run this script to debug Strava API calls
+
 Write-Host "Loading environment variables..." -ForegroundColor Yellow
 
 # Load .env.local
