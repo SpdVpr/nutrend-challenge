@@ -50,9 +50,9 @@ export async function GET(request: Request) {
         try {
           const statsRef = collection(db, 'stats');
           const docSnap = await getDocs(query(statsRef));
-          
+
           // Find the document for this week
-          let weekData = null;
+          let weekData: any = null;
           docSnap.forEach((doc) => {
             if (doc.id === `week-${weekId}`) {
               weekData = doc.data();

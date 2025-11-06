@@ -8,8 +8,8 @@ export async function GET() {
   try {
     const statsRef = collection(db, 'stats');
     const snapshot = await getDocs(statsRef);
-    
-    const documents = [];
+
+    const documents: any[] = [];
     snapshot.forEach((doc) => {
       const data = doc.data();
       documents.push({

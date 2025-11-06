@@ -112,7 +112,7 @@ export default function DiscordSection() {
                   src={`https://discord.com/widget?id=${serverId}&theme=dark`}
                   width="350"
                   height="500"
-                  allowtransparency="true"
+                  allowTransparency={true}
                   frameBorder="0"
                   sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"
                   onLoad={() => {
