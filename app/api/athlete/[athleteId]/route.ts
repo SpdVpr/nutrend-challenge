@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
+import { ActivityForScoring, calculateAggregatePoints, calculatePointsForActivity } from '@/lib/scoring';
 
 export async function GET(
   request: NextRequest,
@@ -32,21 +33,30 @@ export async function GET(
       .where('athleteId', '==', parseInt(athleteId))
       .get();
 
-    const activities = activitiesSnapshot.docs
-      .map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      }))
-      .sort((a: any, b: any) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())
-      .slice(0, 20);
+    const allActivities = activitiesSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as any[];
 
-    const totalActivities = activities.length;
-    const totalHours = activities.reduce((sum, activity: any) => {
+    const sortedActivities = allActivities.sort(
+      (a: any, b: any) =>
+        new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+    );
+
+    const totalActivities = allActivities.length;
+    const totalHours = allActivities.reduce((sum, activity: any) => {
       return sum + (activity.movingTime || 0) / 3600;
     }, 0);
-    const totalDistance = activities.reduce((sum, activity: any) => {
+    const totalDistance = allActivities.reduce((sum, activity: any) => {
       return sum + (activity.distance || 0) / 1000;
     }, 0);
+    const totalCalories = allActivities.reduce((sum, activity: any) => {
+      return sum + (activity.calories || 0);
+    }, 0);
+
+    const aggregatePoints = calculateAggregatePoints(
+      allActivities as ActivityForScoring[]
+    );
 
     const response = {
       athlete: {
@@ -61,15 +71,24 @@ export async function GET(
         totalActivities,
         totalHours: Math.round(totalHours * 10) / 10,
         totalDistance: Math.round(totalDistance * 10) / 10,
+        totalCalories: Math.round(totalCalories),
+        totalPoints: Math.round(aggregatePoints.totalPoints * 10) / 10,
       },
-      recentActivities: activities.slice(0, 5).map((activity: any) => ({
-        id: activity.activityId,
-        name: activity.name,
-        type: activity.type,
-        startDate: activity.startDate,
-        movingTime: activity.movingTime,
-        distance: activity.distance,
-      })),
+      recentActivities: sortedActivities.slice(0, 5).map((activity: any) => {
+        const points = calculatePointsForActivity(
+          activity as ActivityForScoring
+        );
+        return {
+          id: activity.activityId,
+          name: activity.name,
+          type: activity.type,
+          startDate: activity.startDate,
+          movingTime: activity.movingTime,
+          distance: activity.distance,
+          calories: activity.calories || 0,
+          points: Math.round(points.totalPoints * 10) / 10,
+        };
+      }),
     };
 
     return NextResponse.json(response);

@@ -1,116 +1,210 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
-import { TEAMS, CHALLENGE_START_DATE } from '@/lib/constants';
+import { adminDb } from '@/lib/firebase-admin';
+import { TEAMS } from '@/lib/constants';
+import { ActivityForScoring, calculateAggregatePoints } from '@/lib/scoring';
+import type { StoredAthleteToken } from '@/lib/strava-oauth';
 
 export const dynamic = 'force-dynamic';
 
-// Helper function to get current week ID
-function getCurrentWeekId(): string {
-  const today = new Date();
-  let currentWeekStart = new Date(CHALLENGE_START_DATE);
+const TOP_N_PER_TEAM = 10;
+const TOP_DISPLAY_PER_TEAM = 5;
 
-  // Find the Monday of current week
-  while (currentWeekStart <= today) {
-    const weekEnd = new Date(currentWeekStart);
-    weekEnd.setDate(currentWeekStart.getDate() + 6);
-    weekEnd.setHours(23, 59, 59, 999);
+interface AthleteAggregation {
+  athleteId: number;
+  teamId: string;
+  firstname: string;
+  lastname: string;
+  profile?: string;
+  totalActivities: number;
+  totalMovingTime: number; // seconds
+  totalDistance: number; // meters
+  totalCalories: number; // kcal
+  totalPoints: number;
+  lastActivityDate?: string;
+  lastActivityType?: string;
+}
 
-    // If today is within this week, return this week's ID
-    if (today >= currentWeekStart && today <= weekEnd) {
-      return `${currentWeekStart.getFullYear()}-${String(currentWeekStart.getMonth() + 1).padStart(2, '0')}-${String(currentWeekStart.getDate()).padStart(2, '0')}`;
-    }
-
-    // Move to next Monday
-    currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+function resolveTeamId(data: StoredAthleteToken): string | undefined {
+  // If athlete's teamId is one of the configured TEAMS, keep it
+  if (data.teamId && TEAMS.some((t) => t.id === data.teamId)) {
+    return data.teamId;
   }
 
-  // If no week found, return today's date as fallback
-  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  // If there is only one team (our current Nutrend Test klub setup),
+  // assign everyone to that team for leaderboard purposes
+  if (TEAMS.length === 1) {
+    return TEAMS[0].id;
+  }
+
+  // Fallback: try to match by Strava club ID if available
+  if (data.stravaClubId) {
+    const byClub = TEAMS.find((t) => t.stravaClubId === data.stravaClubId);
+    if (byClub) return byClub.id;
+  }
+
+  return undefined;
+}
+
+interface ActivityDocument {
+  athleteId: number;
+  type: string;
+  startDate: string;
+  movingTime: number;
+  distance: number;
+  calories?: number;
 }
 
 export async function GET() {
   try {
-    // Get current week ID
-    const currentWeekId = getCurrentWeekId();
-    console.log('📅 Current week ID:', currentWeekId);
+    // Fetch all athletes and all activities from Firestore (server-side via Admin SDK)
+    const [athletesSnap, activitiesSnap] = await Promise.all([
+      adminDb.collection('athletes').get(),
+      adminDb.collection('activities').get(),
+    ]);
 
-    // Try to read current week's data from Firebase
-    const weekDocRef = doc(db, 'stats', `week-${currentWeekId}`);
-    const weekDocSnap = await getDoc(weekDocRef);
+    const athletesMap = new Map<number, StoredAthleteToken>();
+    const teamMemberCounts = new Map<string, number>();
 
-    let currentWeekData = null;
-    if (weekDocSnap.exists()) {
-      currentWeekData = weekDocSnap.data();
-      console.log('✅ Found current week data:', currentWeekData);
-    } else {
-      console.log('⚠️ No data found for week-' + currentWeekId);
-    }
+    athletesSnap.docs.forEach((doc) => {
+      const data = doc.data() as StoredAthleteToken;
+      const resolvedTeamId = resolveTeamId(data);
 
-    // If current week data exists, check if it has valid data
-    if (currentWeekData && currentWeekData.teams && currentWeekData.teams.length > 0) {
-      // Check if weekly data has actual hours/activities (not just zeros)
-      const hasValidData = currentWeekData.teams.some((team: any) =>
-        (team.hours && team.hours > 0) || (team.activities && team.activities > 0)
+      if (!resolvedTeamId) return;
+
+      const athleteWithResolvedTeam: StoredAthleteToken = {
+        ...data,
+        teamId: resolvedTeamId,
+      };
+
+      athletesMap.set(athleteWithResolvedTeam.athleteId, athleteWithResolvedTeam);
+      teamMemberCounts.set(
+        resolvedTeamId,
+        (teamMemberCounts.get(resolvedTeamId) || 0) + 1
       );
-
-      if (hasValidData) {
-        // Convert weekly stats format to team format
-        const teams = currentWeekData.teams.map((weeklyTeam: any) => {
-          const baseTeam = TEAMS.find(t => t.id === weeklyTeam.teamId);
-          return {
-            ...baseTeam,
-            totalHours: weeklyTeam.hours || 0,
-            totalActivities: weeklyTeam.activities || 0,
-            members: weeklyTeam.members || 0,
-          };
-        });
-
-        return NextResponse.json({
-          teams: teams,
-          lastUpdated: currentWeekData.lastUpdated?.toDate?.()?.toISOString() || new Date().toISOString(),
-          weekId: currentWeekId,
-          source: 'weekly',
-        });
-      } else {
-        console.log('⚠️ Weekly data exists but has no hours/activities, falling back to overall stats');
-      }
-    }
-
-    // Fallback: Try to get overall stats
-    console.log('⚠️ No weekly data, trying overall stats...');
-    const overallDocRef = doc(db, 'stats', 'overall');
-    const overallDocSnap = await getDoc(overallDocRef);
-
-    if (overallDocSnap.exists()) {
-      const overallData = overallDocSnap.data();
-      console.log('✅ Found overall data:', overallData);
-
-      if (overallData.teams && overallData.teams.length > 0) {
-        return NextResponse.json({
-          teams: overallData.teams,
-          lastUpdated: overallData.lastUpdated?.toDate?.()?.toISOString() || new Date().toISOString(),
-          source: 'overall',
-        });
-      }
-    }
-
-    // Last fallback: Return default TEAMS data with a warning
-    console.log('⚠️ No Firebase data found, returning default TEAMS');
-    return NextResponse.json({
-      teams: TEAMS,
-      lastUpdated: null,
-      source: 'default',
-      message: 'No synced data available. Please run sync first.',
     });
 
+    const athleteActivities = new Map<number, ActivityForScoring[]>();
+    const athleteAgg = new Map<number, AthleteAggregation>();
+
+    activitiesSnap.docs.forEach((doc) => {
+      const data = doc.data() as ActivityDocument;
+      const athleteId = data.athleteId as number | undefined;
+      if (!athleteId) return;
+
+      const athlete = athletesMap.get(athleteId);
+      if (!athlete || !athlete.teamId) return; // skip activities for athletes without team
+
+      let agg = athleteAgg.get(athleteId);
+      if (!agg) {
+        agg = {
+          athleteId,
+          teamId: athlete.teamId,
+          firstname: athlete.firstname,
+          lastname: athlete.lastname,
+          profile: athlete.profile,
+          totalActivities: 0,
+          totalMovingTime: 0,
+          totalDistance: 0,
+          totalCalories: 0,
+          totalPoints: 0,
+        };
+        athleteAgg.set(athleteId, agg);
+      }
+
+      const activityForScoring: ActivityForScoring = {
+        type: data.type,
+        startDate: data.startDate,
+        movingTime: data.movingTime || 0,
+        distance: data.distance || 0,
+        calories: data.calories ?? 0,
+      };
+
+      if (!athleteActivities.has(athleteId)) {
+        athleteActivities.set(athleteId, []);
+      }
+      athleteActivities.get(athleteId)!.push(activityForScoring);
+
+      agg.totalActivities += 1;
+      agg.totalMovingTime += activityForScoring.movingTime;
+      agg.totalDistance += activityForScoring.distance;
+      agg.totalCalories += activityForScoring.calories ?? 0;
+
+      // Track last activity (by startDate)
+      if (!agg.lastActivityDate || new Date(activityForScoring.startDate) > new Date(agg.lastActivityDate)) {
+        agg.lastActivityDate = activityForScoring.startDate;
+        agg.lastActivityType = activityForScoring.type;
+      }
+    });
+
+    // Compute points for each athlete using the shared scoring helper (with daily cap)
+    athleteActivities.forEach((activities, athleteId) => {
+      const agg = athleteAgg.get(athleteId);
+      if (!agg) return;
+      const points = calculateAggregatePoints(activities);
+      agg.totalPoints = points.totalPoints;
+    });
+
+    // Group athletes by team
+    const teamAthletes = new Map<string, AthleteAggregation[]>();
+    athleteAgg.forEach((agg) => {
+      if (!teamAthletes.has(agg.teamId)) {
+        teamAthletes.set(agg.teamId, []);
+      }
+      teamAthletes.get(agg.teamId)!.push(agg);
+    });
+
+    // Build team objects with TOP N scoring
+    const teamsWithStats = TEAMS.map((baseTeam) => {
+      const athletes = teamAthletes.get(baseTeam.id) || [];
+
+      const sortedByPoints = [...athletes].sort((a, b) => b.totalPoints - a.totalPoints);
+      const topN = sortedByPoints.slice(0, TOP_N_PER_TEAM);
+      const top5 = sortedByPoints.slice(0, TOP_DISPLAY_PER_TEAM);
+
+      const totalPointsTopN = topN.reduce((sum, a) => sum + a.totalPoints, 0);
+      const totalHoursAll = athletes.reduce((sum, a) => sum + a.totalMovingTime / 3600, 0);
+      const totalActivitiesAll = athletes.reduce((sum, a) => sum + a.totalActivities, 0);
+      const totalCaloriesAll = athletes.reduce((sum, a) => sum + a.totalCalories, 0);
+
+      const topMembers = top5.map((a) => ({
+        name: `${a.firstname} ${a.lastname}`.trim(),
+        hours: Math.round((a.totalMovingTime / 3600) * 10) / 10,
+        activities: a.totalActivities,
+        avatarUrl: a.profile,
+        points: Math.round(a.totalPoints * 10) / 10,
+        distance: Math.round((a.totalDistance / 1000) * 10) / 10,
+        calories: Math.round(a.totalCalories),
+        lastActivityDate: a.lastActivityDate,
+        lastActivityType: a.lastActivityType,
+        athleteId: a.athleteId,
+      }));
+
+      return {
+        ...baseTeam,
+        members: teamMemberCounts.get(baseTeam.id) || 0,
+        totalHours: Math.round(totalHoursAll * 10) / 10,
+        totalActivities: totalActivitiesAll,
+        totalCalories: Math.round(totalCaloriesAll),
+        totalPoints: Math.round(totalPointsTopN * 10) / 10,
+        topMembers,
+      };
+    });
+
+    // Sort teams by total points (TOP N athletes)
+    teamsWithStats.sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+
+    return NextResponse.json({
+      teams: teamsWithStats,
+      lastUpdated: new Date().toISOString(),
+      source: 'activities',
+    });
   } catch (error) {
-    console.error('❌ Error fetching teams data:', error);
+    console.error('❌ Error fetching teams data from activities:', error);
     return NextResponse.json(
       {
         error: 'Failed to fetch teams data',
         teams: TEAMS,
-        source: 'error-fallback'
+        source: 'error-fallback',
       },
       { status: 500 }
     );

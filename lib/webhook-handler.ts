@@ -21,6 +21,7 @@ interface ProcessedActivity {
   startDate: string;
   movingTime: number;
   distance: number;
+  calories?: number;
   name: string;
 }
 
@@ -102,12 +103,6 @@ async function handleActivityCreate(event: StravaWebhookEvent) {
 
   const activity = await getActivityDetails(event.object_id, accessToken);
 
-  const allowedTypes = ['Run', 'Walk', 'Hike', 'Workout'];
-  if (!allowedTypes.includes(activity.type)) {
-    console.log(`⏭️ Activity type ${activity.type} not counted`);
-    return { success: true, message: 'Activity type not counted' };
-  }
-
   const activityDate = new Date(activity.start_date);
   const challengeStart = new Date(CHALLENGE_START_DATE);
   
@@ -129,6 +124,7 @@ async function handleActivityCreate(event: StravaWebhookEvent) {
     startDate: activity.start_date,
     movingTime: activity.moving_time,
     distance: activity.distance,
+    calories: activity.calories ?? 0,
     name: activity.name,
   };
 

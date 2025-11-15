@@ -13,6 +13,8 @@ export interface AthleteData {
     totalActivities: number;
     totalHours: number;
     totalDistance: number;
+    totalCalories: number;
+    totalPoints: number;
   };
   recentActivities: Array<{
     id: number;
@@ -21,6 +23,8 @@ export interface AthleteData {
     startDate: string;
     movingTime: number;
     distance: number;
+    calories: number;
+    points: number;
   }>;
 }
 

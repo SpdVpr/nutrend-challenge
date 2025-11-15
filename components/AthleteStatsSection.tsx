@@ -73,7 +73,7 @@ export default function AthleteStatsSection({ athleteData, onLogout }: AthleteSt
             </button>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6 mb-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6 mb-8">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -112,6 +112,32 @@ export default function AthleteStatsSection({ athleteData, onLogout }: AthleteSt
               </div>
               <div className="text-purple-700 font-medium">Celková vzdálenost</div>
             </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              viewport={{ once: true }}
+              className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-6 text-center"
+            >
+              <div className="text-4xl font-bold text-orange-900 mb-2">
+                {stats.totalCalories.toFixed(0)} kcal
+              </div>
+              <div className="text-orange-700 font-medium">Spálené kalorie</div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              viewport={{ once: true }}
+              className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-6 text-center"
+            >
+              <div className="text-4xl font-bold text-yellow-900 mb-2">
+                {stats.totalPoints.toFixed(1)}
+              </div>
+              <div className="text-yellow-700 font-medium">Body v soutěži</div>
+            </motion.div>
           </div>
 
           {recentActivities.length > 0 && (
@@ -147,6 +173,9 @@ export default function AthleteStatsSection({ athleteData, onLogout }: AthleteSt
                         <div className="text-sm text-text-secondary">
                           {formatDuration(activity.movingTime)}
                         </div>
+                        <div className="text-sm text-text-secondary">
+                          {Math.round(activity.calories)} kcal | {activity.points.toFixed(1)} bodů
+                        </div>
                       </div>
                     </div>
                   </motion.div>
@@ -161,8 +190,8 @@ export default function AthleteStatsSection({ athleteData, onLogout }: AthleteSt
               <div className="flex-1">
                 <h3 className="font-bold text-green-900 mb-2">Jsi připojen!</h3>
                 <p className="text-green-800 text-sm">
-                  Tvoje aktivity se automaticky počítají do týmových statistik. 
-                  Každá nová aktivita typu běh, chůze, turistika nebo workout přidá body tvému týmu.
+                  Tvoje aktivity se automaticky počítají do týmových statistik.
+                  Každá nová sportovní aktivita ze Stravy (běh, chůze, turistika, kolo, plavání, posilovna, jóga atd.) přidá body tvému týmu podle času, vzdálenosti a spálených kalorií.
                 </p>
               </div>
             </div>

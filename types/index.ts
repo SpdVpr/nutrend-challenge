@@ -7,6 +7,8 @@ export interface Team {
   members: number;
   totalHours: number;
   totalActivities: number;
+  totalPoints?: number;
+  totalCalories?: number;
   twitchUrl?: string;
   twitchUsername?: string;
   discordUrl?: string;
@@ -46,6 +48,12 @@ export interface TeamMember {
   hours: number;
   activities: number;
   avatarUrl?: string;
+  points?: number;
+  distance?: number;
+  calories?: number;
+  lastActivityDate?: string;
+  lastActivityType?: string;
+  athleteId?: number;
 }
 
 export interface ChallengeInfo {

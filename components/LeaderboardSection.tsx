@@ -64,9 +64,9 @@ export default function LeaderboardSection() {
     return '';
   };
 
-  const getProgressPercentage = (hours: number) => {
-    const maxHours = Math.max(...teams.map((t) => t.totalHours), 1);
-    return (hours / maxHours) * 100;
+  const getProgressPercentage = (points: number) => {
+    const maxPoints = Math.max(...teams.map((t) => t.totalPoints || 0), 1);
+    return ((points || 0) / maxPoints) * 100;
   };
 
   const formatTimeAgo = (date: Date) => {
@@ -77,6 +77,17 @@ export default function LeaderboardSection() {
     const hours = Math.floor(minutes / 60);
     return `před ${hours} hodinami`;
   };
+
+  const formatActivityDateTime = (iso?: string) => {
+    if (!iso) return '';
+    const date = new Date(iso);
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${day}.${month}. ${hours}:${minutes}`;
+  };
+
 
   return (
     <section id="leaderboard" className="py-20 bg-white">
@@ -130,20 +141,25 @@ export default function LeaderboardSection() {
             )}
             {dataSource === 'overall' && (
               <div className="text-sm text-green-700 bg-green-50 px-4 py-2 rounded-lg">
-                ℹ️ Zobrazují se celkové statistiky od začátku výzvy. Týdenní statistiky nejsou dostupné přes Strava API.
+                ℹ️ Zobrazují se celkové statistiky od začátku výzvy.
+              </div>
+            )}
+            {dataSource === 'activities' && (
+              <div className="text-sm text-purple-700 bg-purple-50 px-4 py-2 rounded-lg">
+                ℹ️ Zobrazují se body spočítané z jednotlivých aktivit (čas + kilometry + kalorie).
               </div>
             )}
           </div>
         </motion.div>
 
-        <div className="flex flex-wrap justify-center gap-6 max-w-6xl mx-auto">
+        <div className="space-y-6 max-w-6xl mx-auto">
           {teams.map((team, index) => (
             <motion.div
               key={team.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: index * 0.1 }}
-              className={`bg-white rounded-xl p-6 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 w-full md:w-[calc(50%-12px)] lg:w-[calc(33.333%-16px)] ${getMedalColor(index)}`}
+              className={`bg-white rounded-xl p-6 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 w-full ${getMedalColor(index)}`}
             >
               <div className="flex items-center gap-4 mb-4">
                 <span className="text-4xl font-bold">{getMedalEmoji(index)}</span>
@@ -162,17 +178,20 @@ export default function LeaderboardSection() {
                 </div>
               </div>
 
-              <h3 className="text-2xl font-bold text-text-primary mb-4">{team.name}</h3>
+              <h3 className="text-2xl font-bold text-text-primary mb-2">{team.name}</h3>
+              <p className="text-sm text-text-secondary mb-4">
+                👥 {team.members || 0} členů v týmu
+              </p>
 
               <div className="space-y-3 mb-4">
-                <div className="flex items-center gap-2 text-text-secondary">
-                  <span>👥</span>
-                  <span className="font-semibold">{team.members || 0}</span>
-                  <span>členů</span>
-                </div>
                 <div className="flex items-center gap-2 text-text-primary">
+                  <span>⭐</span>
+                  <span className="text-xl font-bold">{(team.totalPoints || 0).toFixed(1)}</span>
+                  <span>bodů (TOP 10)</span>
+                </div>
+                <div className="flex items-center gap-2 text-text-secondary">
                   <span>⏱️</span>
-                  <span className="text-xl font-bold">{(team.totalHours || 0).toFixed(1)}</span>
+                  <span className="font-semibold">{(team.totalHours || 0).toFixed(1)}</span>
                   <span>hodin</span>
                 </div>
                 <div className="flex items-center gap-2 text-text-secondary">
@@ -180,18 +199,82 @@ export default function LeaderboardSection() {
                   <span className="font-semibold">{team.totalActivities || 0}</span>
                   <span>aktivit</span>
                 </div>
+                <div className="flex items-center gap-2 text-text-secondary">
+                  <span>🔥</span>
+                  <span className="font-semibold">
+                    {(team.totalCalories || 0).toLocaleString('cs-CZ')}
+                  </span>
+                  <span>kcal</span>
+                </div>
               </div>
 
               <div className="mb-4">
                 <div className="h-2 bg-background-secondary rounded-full overflow-hidden">
                   <motion.div
                     initial={{ width: 0 }}
-                    animate={{ width: `${getProgressPercentage(team.totalHours)}%` }}
+                    animate={{ width: `${getProgressPercentage(team.totalPoints || 0)}%` }}
                     transition={{ duration: 1, delay: index * 0.1 }}
                     className="h-full bg-gradient-to-r from-primary to-accent rounded-full"
                   />
                 </div>
               </div>
+
+
+              {team.topMembers && team.topMembers.length > 0 && (
+                <div className="mt-4 border-t border-background-secondary pt-3">
+                  <p className="text-sm font-semibold text-text-secondary mb-2">
+                    Top 5 nejaktivnějších členů (podle bodů):
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-xs text-left text-text-secondary">
+                      <thead>
+                        <tr className="border-b border-background-secondary">
+                          <th className="py-1 pr-2 font-semibold">#</th>
+                          <th className="py-1 pr-2 font-semibold">Jméno</th>
+                          <th className="py-1 pr-2 font-semibold text-right">Aktivity</th>
+                          <th className="py-1 pr-2 font-semibold text-right">Hodiny</th>
+                          <th className="py-1 pr-2 font-semibold text-right">Km</th>
+                          <th className="py-1 pr-2 font-semibold text-right">Kalorie</th>
+                          <th className="py-1 pr-2 font-semibold text-right">Body</th>
+                          <th className="py-1 pl-2 font-semibold">Poslední aktivita</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {team.topMembers.slice(0, 5).map((member, memberIndex) => (
+                          <tr
+                            key={member.athleteId ?? memberIndex}
+                            className="border-b border-background-secondary/60 last:border-0"
+                          >
+                            <td className="py-1 pr-2 text-text-muted">{memberIndex + 1}.</td>
+                            <td className="py-1 pr-2">{member.name}</td>
+                            <td className="py-1 pr-2 text-right">{member.activities}</td>
+                            <td className="py-1 pr-2 text-right">{member.hours.toFixed(1)}</td>
+                            <td className="py-1 pr-2 text-right">
+                              {member.distance !== undefined ? member.distance.toFixed(1) : '-'}
+                            </td>
+                            <td className="py-1 pr-2 text-right">
+                              {member.calories !== undefined ? member.calories : '-'}
+                            </td>
+                            <td className="py-1 pr-2 text-right font-semibold text-primary">
+                              {member.points !== undefined ? member.points.toFixed(1) : '-'}
+                            </td>
+                            <td className="py-1 pl-2 text-text-muted">
+                              {member.lastActivityDate ? (
+                                <>
+                                  {formatActivityDateTime(member.lastActivityDate)}
+                                  {member.lastActivityType && ` · ${member.lastActivityType}`}
+                                </>
+                              ) : (
+                                '-'
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               <a
                 href={team.stravaClubUrl}
